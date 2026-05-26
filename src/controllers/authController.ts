@@ -1,60 +1,80 @@
 import { Request, Response } from 'express';
-import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
 import prisma from '../utils/prisma';
-import { RegisterInput, LoginInput } from '../types';
+import admin from '../utils/firebaseAdmin';
+import { AuthRequest } from '../middleware/auth';
 
-export const register = async (req: Request<{}, {}, RegisterInput>, res: Response) => {
-  const { email, password, name } = req.body;
-  
+const verifyAndSyncUser = async (idToken: string, provider: string, res: Response, bodyName?: string) => {
   try {
-    const existingUser = await prisma.user.findUnique({ where: { email } });
-    if (existingUser) {
-      return res.status(400).json({ message: 'User already exists' });
+    const decodedToken = await admin.auth().verifyIdToken(idToken);
+    
+    if (!decodedToken.email) {
+      return res.status(400).json({ message: 'Email is required in token' });
     }
-    
-    const hashedPassword = await bcrypt.hash(password, 10);
-    
-    const user = await prisma.user.create({
-      data: { email, password: hashedPassword, name }
+
+    let user = await prisma.user.findUnique({
+      where: { firebaseUid: decodedToken.uid }
     });
-    
-    res.status(201).json({ 
-      message: 'User created successfully', 
-      user: { id: user.id, email: user.email, name: user.name } 
-    });
+
+    if (!user) {
+      user = await prisma.user.create({
+        data: {
+          email: decodedToken.email,
+          name: bodyName || decodedToken.name || decodedToken.email.split('@')[0],
+          image: decodedToken.picture || null,
+          firebaseUid: decodedToken.uid,
+          provider
+        }
+      });
+    } else {
+      // Update info if it changed
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          name: bodyName || decodedToken.name || user.name,
+          image: decodedToken.picture || user.image,
+          provider
+        }
+      });
+    }
+
+    return res.json({ user });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Something went wrong' });
+    console.error('Firebase Auth Error:', error);
+    return res.status(401).json({ message: 'Authentication failed' });
   }
 };
 
-export const login = async (req: Request<{}, {}, LoginInput>, res: Response) => {
-  const { email, password } = req.body;
-  
+export const googleSignIn = async (req: Request, res: Response) => {
+  const { idToken } = req.body;
+  if (!idToken) return res.status(400).json({ message: 'No token provided' });
+  await verifyAndSyncUser(idToken, 'GOOGLE', res);
+};
+
+export const signUp = async (req: Request, res: Response) => {
+  const { idToken, name } = req.body;
+  if (!idToken) return res.status(400).json({ message: 'No token provided' });
+  await verifyAndSyncUser(idToken, 'EMAIL', res, name);
+};
+
+export const signIn = async (req: Request, res: Response) => {
+  const { idToken } = req.body;
+  if (!idToken) return res.status(400).json({ message: 'No token provided' });
+  await verifyAndSyncUser(idToken, 'EMAIL', res);
+};
+
+export const getMe = async (req: AuthRequest, res: Response) => {
   try {
-    const user = await prisma.user.findUnique({ where: { email } });
-    if (!user) {
-      return res.status(400).json({ message: 'Invalid credentials' });
-    }
-    
-    const isPasswordValid = await bcrypt.compare(password, user.password);
-    if (!isPasswordValid) {
-      return res.status(400).json({ message: 'Invalid credentials' });
-    }
-    
-    const token = jwt.sign(
-      { id: user.id, email: user.email }, 
-      process.env.JWT_SECRET!, 
-      { expiresIn: '7d' }
-    );
-    
-    res.json({ 
-      token, 
-      user: { id: user.id, email: user.email, name: user.name } 
+    const user = await prisma.user.findUnique({
+      where: { id: req.user!.id }
     });
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    res.json({ user });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Something went wrong' });
+    res.status(500).json({ message: 'Server error' });
   }
+};
+
+export const logout = async (req: Request, res: Response) => {
+  // Since Firebase is stateless on the backend, we just return success
+  res.json({ message: 'Logged out successfully' });
 };

@@ -7,30 +7,33 @@ datasource db {
 }
 
 model User {
-  id        Int          @id @default(autoincrement())
-  email     String       @unique
-  password  String
-  name      String
-  createdAt DateTime     @default(now())
+  id          String       @id @default(cuid())
+  email       String       @unique
+  name        String
+  image       String?
+  firebaseUid String       @unique
+  provider    String
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
   restaurants Restaurant[]
 }
 
 model Restaurant {
-  id            Int       @id @default(autoincrement())
-  name          String
-  cuisine       String
-  location      String
-  priceRange    String    // "budget", "medium", "expensive"
-  imageUrl      String?
-  status        String    // "want_to_try", "visited"
-  rating        Int?
-  review        String?
-  visitedDate   DateTime?
-  whatIOrdered  String?
+  id              Int       @id @default(autoincrement())
+  name            String
+  cuisine         String
+  location        String
+  priceRange      String
+  imageUrl        String?
+  status          String
+  rating          Int?
+  review          String?
+  visitedDate     DateTime?
+  whatIOrdered    String?
   recommendedDish String?
-  pricePaid     Float?
-  userId        Int
-  user          User      @relation(fields: [userId], references: [id])
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  pricePaid       Float?
+  userId          String
+  user            User      @relation(fields: [userId], references: [id])
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 }
