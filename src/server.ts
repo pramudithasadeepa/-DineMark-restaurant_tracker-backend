@@ -13,8 +13,9 @@ const PORT = process.env.PORT || 5000;
 const allowedOrigins = [
   'http://localhost:3000',
   process.env.FRONTEND_URL,
+  'https://dine-mark-restaurant-tracker-fronte.vercel.app',
   'https://dine-mark-frontend.vercel.app',
-  'https://dine-mark-restaurant-tracker-fronte.vercel.app'
+  'https://www.dinemark.online'
 ].filter(Boolean);
 
 app.use(cors({

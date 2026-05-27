@@ -11,8 +11,13 @@ const verifyAndSyncUser = async (idToken: string, provider: string, res: Respons
       return res.status(400).json({ message: 'Email is required in token' });
     }
 
-    let user = await prisma.user.findUnique({
-      where: { firebaseUid: decodedToken.uid }
+    let user = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { firebaseUid: decodedToken.uid },
+          { email: decodedToken.email }
+        ]
+      }
     });
 
     if (!user) {
@@ -32,6 +37,7 @@ const verifyAndSyncUser = async (idToken: string, provider: string, res: Respons
         data: {
           name: bodyName || decodedToken.name || user.name,
           image: decodedToken.picture || user.image,
+          firebaseUid: decodedToken.uid,
           provider
         }
       });
